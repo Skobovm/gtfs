@@ -1,4 +1,6 @@
-data/
+data/chicago/*.txt
+data/chicago/trains/*.txt
+
 
 src/__pycache__/
 .idea/
