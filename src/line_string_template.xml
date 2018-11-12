@@ -1,0 +1,12 @@
+<Placemark>
+      <name>__NAME__</name>
+      <description>Transparent green wall with yellow outlines</description>
+      <styleUrl>#bluePoly</styleUrl>
+      <LineString>
+        <extrude>1</extrude>
+        <tessellate>1</tessellate>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <coordinates> __COORDS__
+        </coordinates>
+      </LineString>
+    </Placemark>
