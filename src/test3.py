@@ -25,6 +25,31 @@ import pandas as pd
 import geojson as gj
 #shapely lets us manipulate geometric objects
 import shapely.geometry as sh
+from shapely.ops import nearest_points
+
+
+
+
+
+
+
+line = sh.LineString(zip([0, 1, 2], [0, 1, 2]))
+
+point = sh.Point(.6, .6)
+
+point_area = point.buffer(.1)
+
+mp = sh.MultiPoint(list(zip([0, 1, 2], [0, 1, 2])))
+
+mp = mp.union(sh.Point(3, 3))
+for p in mp:
+    print(p)
+
+nps = nearest_points(mp, point)
+
+line_intersect = line.intersects(point_area)
+
+point_intersect = point_area.intersection(line)
 
 
 #Read relevant GTFS tables to pandas dataframes
@@ -67,6 +92,10 @@ route_shape_list = list()
 
 # Tracks the overall route shape
 global_multiline = sh.LineString()
+
+# Multiline dictionary
+multiline_dict = {}
+
 
 #Go through each route
 for route_id in routes_trips_shapes['route_id'].unique():
@@ -127,21 +156,55 @@ for route_id in routes_trips_shapes['route_id'].unique():
     new_global_part = multiline.difference(global_area)
     global_multiline = global_multiline.union(new_global_part)
 
+    # Save the multiline to be queried for later
+    multiline_dict[route_id] = multiline
 
-    #Now we have a shapely MultiLineString object with the lines making
-    #up shape of this route. Next, simplify that object:
-    tolerance = 0.000025
-    simplified_multiline = multiline.simplify(tolerance, preserve_topology=False)
-    #Turn the MultiLine into a geoJSON feature object, and add it to the list
-    #of features that'll be written to file as a featurecollection at the end
-    route_shape_list.append(gj.Feature(geometry=simplified_multiline,
-        properties={"route_id": route_id}))
-    #End of loop through all routes
+    # #Now we have a shapely MultiLineString object with the lines making
+    # #up shape of this route. Next, simplify that object:
+    # tolerance = 0.000025
+    # simplified_multiline = multiline.simplify(tolerance, preserve_topology=False)
+    # #Turn the MultiLine into a geoJSON feature object, and add it to the list
+    # #of features that'll be written to file as a featurecollection at the end
+    # route_shape_list.append(gj.Feature(geometry=simplified_multiline,
+    #     properties={"route_id": route_id}))
+    # #End of loop through all routes
+
+
+disjoint_lines = []
+
+# We now want to go over each route, and determine where it does/doesn't overlap with other routes
+# From this, we can generate edges in a new graph that correspond to shapes
+for route_id in multiline_dict:
+    current_route_line = multiline_dict[route_id]
+
+    # difference area
+    for other_route_id in multiline_dict:
+        if route_id == 'G' and other_route_id == 'Red':
+            print('skipping green/red comparison')
+            continue
+        if route_id == other_route_id:
+            continue
+
+        other_route_line = multiline_dict[other_route_id]
+        other_route_area = other_route_line.buffer(0.00005)
+        if other_route_area.intersects(current_route_line):
+            # Remove the "other" route from the current route
+            # I think this operation is what's intended...
+            current_route_line = current_route_line.difference(other_route_area)
+
+    curr_route_shapes = gj.Feature(geometry=current_route_line, properties={"route_id": route_id})
+    disjoint_lines.append(curr_route_shapes)
+
+
+if disjoint_lines:
+    with open('disjoint_route_shapes.geojson', 'w') as outfile:
+        gj.dump(gj.FeatureCollection(disjoint_lines), outfile)
+
 
 #Finally, write our collection of Features (one for each route) to file in
 #geoJSON format, as a FeatureCollection:
-with open('route_shapes.geojson', 'w') as outfile:
-    gj.dump(gj.FeatureCollection(route_shape_list), outfile)
+# with open('route_shapes.geojson', 'w') as outfile:
+#     gj.dump(gj.FeatureCollection(route_shape_list), outfile)
 
 tolerance = 0.000025
 simplified_global_multiline = global_multiline.simplify(tolerance, preserve_topology=False)
